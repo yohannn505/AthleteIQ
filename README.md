@@ -1,50 +1,25 @@
-# Welcome to your Expo app 👋
+# AthleteIQ 
+**AI-Driven Biometric Platform for Injury Prevention & Performance**
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+AthleteIQ is a high-performance mobile application built with **React Native** and **Firebase**. It serves as a digital "AI Coach" by analyzing athlete workload metrics to identify fatigue patterns and mitigate injury risk before it happens.
 
-## Get started
+## 🛠️ Technical Stack
+* **Frontend:** React Native (Expo) with TypeScript for type-safe development.
+* **Backend:** Firebase (Firestore) for real-time biometric data synchronization.
+* **Logic:** Custom heuristic engine to calculate workload ratios.
+* **UI/UX:** Specialized dashboards for both Athletes (tracking) and Coaches (monitoring).
 
-1. Install dependencies
+##  Key Features
+* **Injury Risk Scoring:** Uses biometric inputs to generate a color-coded risk assessment (Low, Moderate, High).
+* **Heuristic AI Coaching:** Provides automated, data-backed training recommendations based on daily recovery scores.
+* **Real-time Analytics:** Interactive charts showing workload trends over time.
 
-   ```bash
-   npm install
-   ```
+## 📁 Project Structure
+* `app/`: Core navigation and screen logic.
+* `firebaseConfig.ts`: Secure configuration for cloud database services.
+* `utils/`: Reusable logic for biometric calculations and data formatting.
 
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
-```
-
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## ⚙️ Installation & Setup
+1. Clone the repository: `git clone https://github.com/yohannn505/AthleteIQ.git`
+2. Install dependencies: `npm install`
+3. Start the development server: `npx expo start`
