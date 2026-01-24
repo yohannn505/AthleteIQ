@@ -1,269 +1,203 @@
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { collection, getDocs, limit, orderBy, query, where } from 'firebase/firestore';
+import React, { useCallback, useState } from 'react';
 import {
-  addDoc,
-  collection,
-  getDocs,
-  orderBy,
-  query,
-  serverTimestamp,
-  where
-} from 'firebase/firestore';
-import React, { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
   Dimensions,
-  Modal,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View
 } from 'react-native';
-import { BarChart } from "react-native-chart-kit";
+import { LineChart } from 'react-native-chart-kit';
 import { auth, db } from '../../firebaseConfig';
 
-interface Activity {
-  id: string;
-  name: string;
-  icon: string;
-  color: string;
-  sessions: number;
-}
-
-export default function HomeScreen() {
+export default function DashboardScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [showAddActivity, setShowAddActivity] = useState(false);
-  const [newActivityName, setNewActivityName] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
   
-  // Analytics State
-  const [globalRisk, setGlobalRisk] = useState("Low");
-  const [chartData, setChartData] = useState([0, 0, 0, 0, 0, 0, 0]);
+  const [riskLevel, setRiskLevel] = useState<'Low' | 'Medium' | 'High'>('Low');
+  const [calories, setCalories] = useState(0);
+  const [workoutCount, setWorkoutCount] = useState(0);
+  const [chartData, setChartData] = useState<number[]>([0, 0, 0, 0, 0, 0]);
+  const [recentActivities, setRecentActivities] = useState<any[]>([]); 
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchDashboardData();
+    }, [])
+  );
 
-  const fetchData = async () => {
+  const fetchDashboardData = async () => {
+    const userId = auth.currentUser?.uid || "VIDEO_DEMO_USER";
+    
     try {
-      setLoading(true);
-      const userId = auth.currentUser?.uid || 'guest';
-      
-      // 1. Fetch Activities
-      const qAct = query(
-        collection(db, "activities"), 
+      const q = query(
+        collection(db, "activities"),
         where("userId", "==", userId),
-        orderBy("createdAt", "desc")
+        orderBy("createdAt", "desc"),
+        limit(10)
       );
-      const actSnap = await getDocs(qAct);
-      const loadedActs = actSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Activity[];
-      setActivities(loadedActs);
 
-      // 2. Fetch Sessions for Chart and Risk
-      const qSessions = query(
-        collection(db, "sessions"),
-        where("userId", "==", userId)
-      );
-      const sessionSnap = await getDocs(qSessions);
-      
-      let totalDuration = 0;
-      const weeklyTotals = [0, 0, 0, 0, 0, 0, 0]; // Mon-Sun
+      const querySnapshot = await getDocs(q);
+      const activities = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-      sessionSnap.docs.forEach(doc => {
-        const data = doc.data();
-        totalDuration += data.duration || 0;
+      setRecentActivities(activities);
 
-        // Grouping for Chart
-        const sessionDate = data.timestamp?.toDate();
-        if (sessionDate) {
-          const day = sessionDate.getDay(); 
-          const index = day === 0 ? 6 : day - 1; // Adjust to Mon-Sun
-          weeklyTotals[index] += data.duration || 0;
-        }
-      });
+      const totalCals = activities.reduce((sum: any, act: any) => sum + (act.calories || 0), 0);
+      setCalories(totalCals);
+      setWorkoutCount(activities.length);
 
-      setChartData(weeklyTotals);
-      
       // Risk Logic
-      if (totalDuration > 500) setGlobalRisk("High");
-      else if (totalDuration > 200) setGlobalRisk("Medium");
-      else setGlobalRisk("Low");
+      let currentRisk: 'Low' | 'Medium' | 'High' = 'Low';
+      if (totalCals > 2000) currentRisk = 'High';
+      else if (totalCals > 800) currentRisk = 'Medium';
+      setRiskLevel(currentRisk);
 
-    } catch (error) {
-      console.error("Error fetching data: ", error);
+      // Chart Logic
+      if (activities.length > 0) {
+        const recentActivity = activities.slice(0, 6).reverse(); 
+        const dataPoints = recentActivity.map((a: any) => a.intensity || 0);
+        while (dataPoints.length < 6) dataPoints.unshift(0);
+        setChartData(dataPoints);
+      } else {
+        setChartData([0, 0, 0, 0, 0, 0]);
+      }
+
+    } catch (e) {
+      console.log("Error fetching dashboard:", e);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  const addActivity = async (activity: Partial<Activity>) => {
-    try {
-      const activityData = {
-        name: activity.name || 'New Activity',
-        icon: activity.icon || 'run',
-        color: activity.color || '#22d3ee',
-        sessions: 0,
-        createdAt: serverTimestamp(),
-        userId: auth.currentUser?.uid || 'guest',
-      };
-      const docRef = await addDoc(collection(db, "activities"), activityData);
-      setActivities([{ id: docRef.id, ...activityData } as Activity, ...activities]);
-      setShowAddActivity(false);
-      setNewActivityName('');
-    } catch (error) {
-      Alert.alert("Error", "Could not save activity.");
-    }
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchDashboardData();
   };
 
-  const riskColor = globalRisk === 'High' ? '#ef4444' : globalRisk === 'Medium' ? '#fbbf24' : '#10b981';
+  const getRiskColor = () => {
+    if (riskLevel === 'High') return '#ef4444';
+    if (riskLevel === 'Medium') return '#f59e0b';
+    return '#22d3ee';
+  };
 
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.headerTitle}>AthleteIQ</Text>
-          <View style={styles.headerSubtitle}>
-            <Ionicons name="sparkles" size={14} color="#22d3ee" />
-            <Text style={styles.headerSubtitleText}>AI Analysis Active</Text>
-          </View>
+          <Text style={styles.greeting}>Welcome back,</Text>
+          <Text style={styles.username}>Athlete</Text>
         </View>
-        <TouchableOpacity style={styles.headerButton} onPress={() => setShowAddActivity(true)}>
-          <Ionicons name="add" size={24} color="white" />
+        <TouchableOpacity onPress={() => router.push('/modal')} style={styles.addBtn}>
+          <Ionicons name="add" size={28} color="#0f172a" />
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        
-        {/* READINESS CARD */}
-        <View style={[styles.mainRiskCard, { borderColor: riskColor + '50' }]}>
-          <View style={styles.riskHeader}>
-            <Ionicons name="shield-checkmark" size={20} color={riskColor} />
-            <Text style={styles.riskTitle}>OVERALL READINESS</Text>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#22d3ee" />}
+      >
+        {/* Risk Card */}
+        <View style={[styles.card, { borderColor: getRiskColor() }]}>
+          <View style={styles.cardHeader}>
+            <Ionicons name="pulse" size={24} color={getRiskColor()} />
+            <Text style={[styles.cardTitle, { color: getRiskColor() }]}>INJURY RISK</Text>
           </View>
-          <Text style={[styles.riskStatus, { color: riskColor }]}>{globalRisk} Risk</Text>
-          <Text style={styles.riskDesc}>Based on training volume and load across all sports.</Text>
+          <Text style={styles.riskValue}>{riskLevel}</Text>
+          <Text style={styles.riskSubtitle}>{riskLevel === 'High' ? 'Training load spike detected.' : 'Training load is optimized.'}</Text>
         </View>
 
-        {/* CHART SECTION */}
+        {/* Stats Row */}
+        <View style={styles.row}>
+          <View style={styles.metricCard}><Text style={styles.metricLabel}>CALORIES</Text><Text style={styles.metricValue}>{calories}</Text></View>
+          <View style={styles.metricCard}><Text style={styles.metricLabel}>WORKOUTS</Text><Text style={styles.metricValue}>{workoutCount}</Text></View>
+        </View>
+
+        {/* Chart */}
+        <Text style={styles.sectionTitle}>INTENSITY TREND</Text>
         <View style={styles.chartContainer}>
-          <Text style={styles.sectionTitle}>Weekly Volume (min)</Text>
-          <BarChart
-            data={{
-              labels: ["M", "T", "W", "T", "F", "S", "S"],
-              datasets: [{ data: chartData }]
-            }}
-            width={Dimensions.get("window").width - 48}
-            height={180}
-            yAxisLabel=""
-            yAxisSuffix=""
+          <LineChart
+            data={{ labels: ["", "", "", "", "", ""], datasets: [{ data: chartData }] }}
+            width={Dimensions.get("window").width - 48} height={220}
+            yAxisLabel="" yAxisSuffix=""
             chartConfig={{
-              backgroundColor: "#0f172a",
-              backgroundGradientFrom: "#0f172a",
-              backgroundGradientTo: "#0f172a",
-              decimalPlaces: 0,
-              color: (opacity = 1) => `rgba(34, 211, 238, ${opacity})`,
-              labelColor: (opacity = 1) => `rgba(148, 163, 184, ${opacity})`,
-              barPercentage: 0.6,
+              backgroundColor: "#0f172a", backgroundGradientFrom: "#0f172a", backgroundGradientTo: "#0f172a", decimalPlaces: 0,
+              color: (opacity = 1) => `rgba(34, 211, 238, ${opacity})`, labelColor: (opacity = 1) => `rgba(148, 163, 184, ${opacity})`,
+              style: { borderRadius: 16 }, propsForDots: { r: "6", strokeWidth: "2", stroke: "#0f172a" }
             }}
-            style={{ borderRadius: 20, marginTop: 12, paddingRight: 40 }}
-            withInnerLines={false}
+            bezier style={{ marginVertical: 8, borderRadius: 16 }}
           />
         </View>
 
-        <Text style={styles.sectionTitle}>Your Activities</Text>
-        {loading ? (
-          <ActivityIndicator size="large" color="#22d3ee" />
-        ) : (
-          activities.map((activity) => (
-            <TouchableOpacity 
-              key={activity.id} 
-              style={styles.activityCard} 
-              onPress={() => router.push(`/${activity.id}`)}
-            >
-              <View style={styles.activityContent}>
-                <View style={[styles.activityIcon, { backgroundColor: (activity.color || '#22d3ee') + '20' }]}>
-                  <MaterialCommunityIcons name={(activity.icon || 'run') as any} size={28} color={activity.color} />
-                </View>
-                <View>
-                  <Text style={styles.activityName}>{activity.name}</Text>
-                  <Text style={styles.activityStats}>View specialized analytics</Text>
-                </View>
+        {/* RESTORED: Recent Activities List */}
+        <Text style={styles.sectionTitle}>RECENT ACTIVITY</Text>
+        {recentActivities.map((activity, index) => (
+          <View key={index} style={styles.activityItem}>
+            <View style={styles.activityLeft}>
+              <View style={styles.iconBg}>
+                <Ionicons name="barbell" size={20} color="white" />
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#475569" />
-            </TouchableOpacity>
-          ))
-        )}
+              <View>
+                <Text style={styles.activityName}>{activity.name}</Text>
+                <Text style={styles.activitySub}>{activity.duration} min • {activity.calories} cal</Text>
+              </View>
+            </View>
+            <View style={styles.activityRight}>
+               {activity.heartRate > 0 && (
+                 <View style={styles.tag}>
+                   <Ionicons name="heart" size={10} color="#ef4444" />
+                   <Text style={styles.tagText}>{activity.heartRate}</Text>
+                 </View>
+               )}
+            </View>
+          </View>
+        ))}
+
       </ScrollView>
 
-      {/* FLOATING COACH BUTTON */}
-      <TouchableOpacity 
-        style={styles.floatingCoachBtn} 
-        onPress={() => router.push('/coach')}
-      >
-        <Ionicons name="sparkles" size={20} color="white" />
-        <Text style={styles.floatingBtnText}>Ask Coach</Text>
+      {/* RESTORED: The Floating Chat Button */}
+      <TouchableOpacity style={styles.fab} onPress={() => router.push('/coach')}>
+        <Ionicons name="chatbubble-ellipses" size={28} color="#0f172a" />
+        <Text style={styles.fabText}>Ask Coach</Text>
       </TouchableOpacity>
-
-      {/* Modal for adding activities (kept from previous build) */}
-      <Modal visible={showAddActivity} animationType="fade" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>New Discipline</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Activity Name (e.g. Soccer)"
-              placeholderTextColor="#64748b"
-              value={newActivityName}
-              onChangeText={setNewActivityName}
-            />
-            <TouchableOpacity 
-              style={styles.createButton} 
-              onPress={() => addActivity({ name: newActivityName })}
-            >
-              <Text style={styles.createButtonText}>Start Tracking</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setShowAddActivity(false)} style={{marginTop: 15, alignItems: 'center'}}>
-              <Text style={{color: '#94a3b8'}}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#020617' },
-  header: { backgroundColor: '#0f172a', paddingTop: 60, paddingHorizontal: 24, paddingBottom: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  headerTitle: { fontSize: 24, fontWeight: 'bold', color: 'white' },
-  headerSubtitle: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
-  headerSubtitleText: { color: '#22d3ee', fontSize: 10, fontWeight: 'bold', letterSpacing: 1 },
-  headerButton: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#0891b2', justifyContent: 'center', alignItems: 'center' },
-  scrollView: { flex: 1 },
-  scrollContent: { padding: 24, paddingBottom: 100 },
-  mainRiskCard: { backgroundColor: '#0f172a', borderRadius: 24, padding: 24, borderWidth: 1, marginBottom: 24 },
-  riskHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
-  riskTitle: { color: '#94a3b8', fontSize: 10, fontWeight: 'bold', letterSpacing: 1.5 },
-  riskStatus: { fontSize: 32, fontWeight: 'bold', marginBottom: 4 },
-  riskDesc: { color: '#64748b', fontSize: 13 },
-  chartContainer: { marginBottom: 32 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: 'white', marginBottom: 8 },
-  activityCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#0f172a', borderRadius: 20, padding: 16, borderWidth: 1, borderColor: '#1e293b', marginBottom: 12 },
-  activityContent: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  activityIcon: { width: 48, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  activityName: { fontSize: 16, fontWeight: 'bold', color: 'white' },
-  activityStats: { color: '#64748b', fontSize: 12, marginTop: 2 },
-  floatingCoachBtn: { position: 'absolute', bottom: 30, right: 24, backgroundColor: '#0891b2', paddingVertical: 14, paddingHorizontal: 22, borderRadius: 30, flexDirection: 'row', alignItems: 'center', gap: 10, elevation: 8, shadowColor: '#22d3ee', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 10 },
-  floatingBtnText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', padding: 24 },
-  modalContent: { backgroundColor: '#0f172a', borderRadius: 24, padding: 24, borderWidth: 1, borderColor: '#1e293b' },
-  modalTitle: { color: 'white', fontSize: 20, fontWeight: 'bold', marginBottom: 20 },
-  input: { backgroundColor: '#1e293b', borderRadius: 12, padding: 16, color: 'white', marginBottom: 16 },
-  createButton: { backgroundColor: '#0891b2', padding: 16, borderRadius: 12, alignItems: 'center' },
-  createButtonText: { color: 'white', fontWeight: 'bold' },
+  container: { flex: 1, backgroundColor: '#020617', paddingTop: 60 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, marginBottom: 20 },
+  greeting: { color: '#94a3b8', fontSize: 16 },
+  username: { color: 'white', fontSize: 24, fontWeight: 'bold' },
+  addBtn: { backgroundColor: '#22d3ee', width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
+  scrollContent: { paddingHorizontal: 24, paddingBottom: 100 },
+  card: { backgroundColor: '#1e293b', padding: 20, borderRadius: 24, borderWidth: 1, marginBottom: 20 },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  cardTitle: { fontSize: 14, fontWeight: 'bold', letterSpacing: 1 },
+  riskValue: { color: 'white', fontSize: 42, fontWeight: 'bold' },
+  riskSubtitle: { color: '#94a3b8', marginTop: 5 },
+  row: { flexDirection: 'row', gap: 16, marginBottom: 30 },
+  metricCard: { flex: 1, backgroundColor: '#0f172a', padding: 20, borderRadius: 20, borderWidth: 1, borderColor: '#1e293b', alignItems: 'center' },
+  metricLabel: { color: '#64748b', fontSize: 12, fontWeight: 'bold', marginBottom: 8 },
+  metricValue: { color: 'white', fontSize: 28, fontWeight: 'bold' },
+  sectionTitle: { color: 'white', fontSize: 18, fontWeight: 'bold', marginBottom: 15, marginTop: 10 },
+  chartContainer: { alignItems: 'center', marginBottom: 20 },
+  
+  activityItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1e293b', padding: 16, borderRadius: 16, marginBottom: 12 },
+  activityLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  iconBg: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#334155', justifyContent: 'center', alignItems: 'center' },
+  activityName: { color: 'white', fontWeight: 'bold', fontSize: 16 },
+  activitySub: { color: '#94a3b8', fontSize: 12 },
+  activityRight: { alignItems: 'flex-end' },
+  tag: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(239, 68, 68, 0.2)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  tagText: { color: '#ef4444', fontSize: 12, fontWeight: 'bold' },
+
+  fab: { position: 'absolute', bottom: 30, right: 24, backgroundColor: '#22d3ee', flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12, paddingHorizontal: 20, borderRadius: 30, elevation: 5, shadowColor: '#22d3ee', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 },
+  fabText: { color: '#0f172a', fontWeight: 'bold', fontSize: 16 },
 });

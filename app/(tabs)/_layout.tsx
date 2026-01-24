@@ -11,9 +11,9 @@ export default function TabLayout() {
         backgroundColor: '#0f172a',
         borderTopColor: '#1e293b',
         height: 85,
-        paddingBottom: 10,
+        paddingBottom: 25, 
       },
-      headerShown: false,
+      headerShown: false, 
     }}>
       <Tabs.Screen
         name="index"
@@ -22,13 +22,9 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <Ionicons name="flash" size={24} color={color} />,
         }}
       />
-      <Tabs.Screen
-        name="explore"
-        options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <Ionicons name="search" size={24} color={color} />,
-        }}
-      />
+      
+      {/* Explore and Discover have been removed to keep the UI clean for your showcase */}
+
       <Tabs.Screen
         name="profile"
         options={{
@@ -36,7 +32,6 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <Ionicons name="person" size={24} color={color} />,
         }}
       />
-      {/* Note: discover.tsx is hidden because we aren't defining a Screen for it here */}
     </Tabs>
   );
 }

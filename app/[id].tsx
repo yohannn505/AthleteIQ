@@ -12,10 +12,9 @@ export default function SportDetailScreen() {
   const [sessions, setSessions] = useState<any[]>([]);
   const [showLogModal, setShowLogModal] = useState(false);
   
-  // Custom Data States
   const [manualDuration, setManualDuration] = useState('');
   const [manualHR, setManualHR] = useState('');
-  const [intensity, setIntensity] = useState(5); // 1-10 scale
+  const [intensity, setIntensity] = useState(5); 
 
   const displayName = typeof id === 'string' ? id.charAt(0).toUpperCase() + id.slice(1) : 'Activity';
 

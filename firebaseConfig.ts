@@ -1,7 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
-// Note: We are removing getAnalytics for now as it causes issues in Expo Go
 
 const firebaseConfig = {
   apiKey: "AIzaSyDDUWHfB3N4dSbhgRrbxiG1tHfXjBvr0V0",
@@ -13,10 +12,8 @@ const firebaseConfig = {
   measurementId: "G-CMLBDGJ15K"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize services and EXPORT them so index.tsx can see them
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
